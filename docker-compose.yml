@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  # Base de données PostgreSQL (notre entrepôt de données)
+  db:
+    image: postgres:14
+    container_name: entrepot_db
+    restart: always
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: entrepot
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d
+    networks:
+      - app-network
+
+  # Service ETL pour l'intégration des données Excel
+  etl:
+    build: ./etl
+    container_name: etl_service
+    restart: always
+    volumes:
+      - ./data/excel:/app/data
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=admin
+      - DB_PASSWORD=password
+      - DB_NAME=entrepot
+      - WATCH_DIRECTORY=/app/data
+      - POLLING_INTERVAL=60  # Vérifier les fichiers toutes les 60 secondes
+    depends_on:
+      - db
+    networks:
+      - app-network
+
+  # Metabase pour le dashboarding
+  metabase:
+    image: metabase/metabase:latest
+    container_name: metabase_dashboard
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - MB_DB_TYPE=postgres
+      - MB_DB_DBNAME=metabase
+      - MB_DB_PORT=5432
+      - MB_DB_USER=admin
+      - MB_DB_PASS=password
+      - MB_DB_HOST=db
+    depends_on:
+      - db
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
